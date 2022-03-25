@@ -75,9 +75,9 @@ def show_report(cash: List[Cash]) -> dict:
             ['Списано денежных средств за отчетный период', abs(withdrawals_amount)],
             ['Остаток денежных средств на счете на конец отчетного периода', end_amount],
         ]
-        reports[currency.name] = {"begin_amount" : str(begin_amount),
+        reports[currency.name] = {"begin_amount" : str(begin_amount.amount),
                                   "deposits_amount": str(deposits_amount.amount),
-                                  "withdrawals_amount": str(withdrawals_amount.amount),
+                                  "withdrawals_amount": str(abs(withdrawals_amount.amount)),
                                   "end_amount" : str(end_amount.amount)}
         print('\n')
         print(tabulate(report, headers='firstrow', tablefmt='presto', colalign=('right', 'decimal')))

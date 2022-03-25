@@ -325,6 +325,7 @@ def main():
     show_portfolio_report(portfolio)
 
 def run(activity_reports_dir : str, confirmation_reports_dir : str) -> str:
+    report = dict()
     parser_object = parse_reports(activity_reports_dir, confirmation_reports_dir)
 
     trades = parser_object.trades
@@ -334,7 +335,7 @@ def run(activity_reports_dir : str, confirmation_reports_dir : str) -> str:
 
     if not trades:
         logging.error('no trades found')
-        return
+        return 'no trades found'
 
     # fixme first_year without dividends
     first_year = min(trades[0].trade_date.year, dividends[0].date.year) if dividends else trades[0].trade_date.year
@@ -349,10 +350,14 @@ def run(activity_reports_dir : str, confirmation_reports_dir : str) -> str:
     portfolio = analyzer.final_portfolio
 
     trades_report = prepare_trades_report(finished_trades, cbr_client_usd) if finished_trades else None
-
+    report["trades_report"] = trades_report
+    report["dividends_report"] = dividends_report
+    report["fees_report"] = fees_report
+    report["interests_report"] = interests_report
+    report["portfolio"] = portfolio
     report_string = show_report(trades_report, dividends_report, fees_report, interests_report, [], True)
     report_string += show_portfolio_report(portfolio)
-    return report_string
+    return report
 
 
 if __name__ == '__main__':
