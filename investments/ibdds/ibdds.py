@@ -45,7 +45,8 @@ def dds_specific_round(source_amount: Money) -> Money:
     return (source_amount / 1000).round(3)
 
 
-def show_report(cash: List[Cash]):
+def show_report(cash: List[Cash]) -> dict:
+    reports = {}
     currencies = set(map(lambda x: x.amount.currency, cash))
     logging.info(f'currency={currencies}')
 
@@ -74,10 +75,14 @@ def show_report(cash: List[Cash]):
             ['Списано денежных средств за отчетный период', abs(withdrawals_amount)],
             ['Остаток денежных средств на счете на конец отчетного периода', end_amount],
         ]
-
+        reports[currency.name] = {"begin_amount" : str(begin_amount),
+                                  "deposits_amount": str(deposits_amount.amount),
+                                  "withdrawals_amount": str(withdrawals_amount.amount),
+                                  "end_amount" : str(end_amount.amount)}
         print('\n')
         print(tabulate(report, headers='firstrow', tablefmt='presto', colalign=('right', 'decimal')))
     print('\n')
+    return reports
 
 
 def main():
@@ -96,6 +101,13 @@ def main():
 
     show_report(cash_report)
 
+def run(activity_report_filepath: str) -> dict:
+    parser_object = parse_reports(activity_report_filepath)
+
+    cash_report = parser_object.cash
+    logging.info(f'cash report={cash_report}')
+
+    return show_report(cash_report)
 
 if __name__ == '__main__':
     main()

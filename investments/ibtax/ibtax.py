@@ -202,16 +202,21 @@ def _show_trades_report(trades: pandas.DataFrame, year: int, verbose: bool):
     print('\n\n')
 
 
-def show_portfolio_report(portfolio: List[PortfolioElement]):
+def show_portfolio_report(portfolio: List[PortfolioElement]) -> str:
     _show_header('PORTFOLIO')
+    report_string = 'PORTFOLIO\n\n'
     for elem in portfolio:
         print(f'{elem.ticker}\tx\t{elem.quantity}')
+        report_string += '{}\tx\t{}'.format(elem.ticker, elem.quantity)
     print('\n\n')
+    report_string += '\n\n'
+    return report_string
 
 
 def show_report(trades: Optional[pandas.DataFrame], dividends: Optional[pandas.DataFrame],
                 fees: Optional[pandas.DataFrame], interests: Optional[pandas.DataFrame],
-                filter_years: List[int], verbose: bool):  # noqa: WPS318,WPS319
+                filter_years: List[int], verbose: bool) -> str:  # noqa: WPS318,WPS319
+    report_string = ""
     years = set()
     for report in (trades, dividends, fees, interests):
         if report is not None:
@@ -221,6 +226,7 @@ def show_report(trades: Optional[pandas.DataFrame], dividends: Optional[pandas.D
         if filter_years and (year not in filter_years):
             continue
         print('\n', '______' * 8, f'  {year}  ', '______' * 8, '\n')
+        report_string += '\n' + '______' * 8 + f'  {year}  ' + '______' * 8 + '\n'
 
         if dividends is not None:
             _show_dividends_report(dividends, year, verbose)
@@ -235,6 +241,8 @@ def show_report(trades: Optional[pandas.DataFrame], dividends: Optional[pandas.D
             _show_interests_report(interests, year, verbose)
 
         print('______' * 8, f'EOF {year}', '______' * 8, '\n\n\n')
+        report_string += '______' * 8 + f'EOF {year}' + '______' * 8 + '\n\n\n'
+    return report_string
 
 
 def csvs_in_dir(directory: str):
@@ -315,6 +323,36 @@ def main():
 
     show_report(trades_report, dividends_report, fees_report, interests_report, args.years, args.verbose)
     show_portfolio_report(portfolio)
+
+def run(activity_reports_dir : str, confirmation_reports_dir : str) -> str:
+    parser_object = parse_reports(activity_reports_dir, confirmation_reports_dir)
+
+    trades = parser_object.trades
+    dividends = parser_object.dividends
+    fees = parser_object.fees
+    interests = parser_object.interests
+
+    if not trades:
+        logging.error('no trades found')
+        return
+
+    # fixme first_year without dividends
+    first_year = min(trades[0].trade_date.year, dividends[0].date.year) if dividends else trades[0].trade_date.year
+    cbr_client_usd = cbr.ExchangeRatesRUB(year_from=first_year, cache_dir='.')
+
+    dividends_report = prepare_dividends_report(dividends, cbr_client_usd, True) if dividends else None
+    fees_report = prepare_fees_report(fees, cbr_client_usd, True) if fees else None
+    interests_report = prepare_interests_report(interests, cbr_client_usd) if interests else None
+
+    analyzer = TradesAnalyzer(trades)
+    finished_trades = analyzer.finished_trades
+    portfolio = analyzer.final_portfolio
+
+    trades_report = prepare_trades_report(finished_trades, cbr_client_usd) if finished_trades else None
+
+    report_string = show_report(trades_report, dividends_report, fees_report, interests_report, [], True)
+    report_string += show_portfolio_report(portfolio)
+    return report_string
 
 
 if __name__ == '__main__':

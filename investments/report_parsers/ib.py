@@ -2,7 +2,7 @@ import csv
 import datetime
 import logging
 import re
-from typing import Dict, Iterator, List, NamedTuple, Optional, Tuple
+from typing import Dict, Iterator, List, Tuple
 
 from investments.cash import Cash
 from investments.currency import Currency
@@ -20,10 +20,6 @@ def _parse_datetime(strval: str) -> datetime.datetime:
 
 def _parse_date(strval: str) -> datetime.date:
     return datetime.datetime.strptime(strval, '%Y-%m-%d').date()
-
-
-def _parse_trade_quantity(strval: str) -> int:
-    return int(strval.replace(',', ''))
 
 
 def _parse_dividend_description(description: str) -> Tuple[str, str]:
@@ -101,49 +97,6 @@ class TickersStorage:
         return self._multipliers[ticker]
 
 
-class SettleDate(NamedTuple):
-    order_id: str
-    settle_date: datetime.date
-
-
-class SettleDatesStorage:
-    def __init__(self):
-        self._settle_data: Dict[Tuple[str, datetime.datetime], SettleDate] = {}
-
-    def __len__(self):
-        return len(self._settle_data)
-
-    def put(
-        self,
-        ticker: str,
-        operation_date: datetime.datetime,
-        settle_date: datetime.date,
-        order_id: str,
-    ):
-        existing_item = self.get(ticker, operation_date)
-        if existing_item:
-            if existing_item.settle_date != settle_date and existing_item.order_id != order_id:
-                raise AssertionError(f'Duplicate settle date for key {(ticker, operation_date)} with {order_id}')
-        self._settle_data[(ticker, operation_date)] = SettleDate(order_id, settle_date)
-
-    def get(
-        self,
-        ticker: str,
-        operation_date: datetime.datetime,
-    ) -> Optional[SettleDate]:
-        return self._settle_data.get((ticker, operation_date))
-
-    def get_date(
-        self,
-        ticker: str,
-        operation_date: datetime.datetime,
-    ) -> Optional[datetime.date]:
-        existing_settle_item = self.get(ticker, operation_date)
-        if existing_settle_item:
-            return existing_settle_item.settle_date
-        return None
-
-
 class InteractiveBrokersReportParser:
     def __init__(self):
         self._trades = []
@@ -153,7 +106,7 @@ class InteractiveBrokersReportParser:
         self._cash: List[Cash] = []
         self._deposits_and_withdrawals = []
         self._tickers = TickersStorage()
-        self._settle_dates = SettleDatesStorage()
+        self._settle_dates = {}
 
     def __repr__(self):
         return f'IbParser(trades={len(self.trades)}, dividends={len(self.dividends)}, fees={len(self.fees)}, interests={len(self.interests)})'  # noqa: WPS221
@@ -228,15 +181,14 @@ class InteractiveBrokersReportParser:
             f = parser.parse(row)
             if f['LevelOfDetail'] != 'EXECUTION':
                 continue
-            if f['TransactionType'] == 'TradeCancel':
-                continue
+            settle_date = _parse_date(f['SettleDate'])
 
-            self._settle_dates.put(
-                f['Symbol'],
-                _parse_datetime(f['Date/Time']),
-                _parse_date(f['SettleDate']),
-                f['OrderID'],
-            )
+            key = (f['Symbol'], _parse_datetime(f['Date/Time']))
+            existing_settle_date = self._settle_dates.get(key)
+            if existing_settle_date is not None:
+                assert existing_settle_date == settle_date
+            else:
+                self._settle_dates[key] = settle_date
 
     def _real_parse_activity_csv(self, csv_reader: Iterator[List[str]], parsers):
         nrparser = NamedRowsParser()
@@ -281,14 +233,14 @@ class InteractiveBrokersReportParser:
 
         dt = _parse_datetime(f['Date/Time'])
 
-        settle_date = self._settle_dates.get_date(ticker.symbol, dt)
+        settle_date = self._settle_dates.get((ticker.symbol, dt))
         assert settle_date is not None
 
         self._trades.append(Trade(
             ticker=ticker,
             trade_date=dt,
             settle_date=settle_date,
-            quantity=_parse_trade_quantity(f['Quantity']) * quantity_multiplier,
+            quantity=int(f['Quantity']) * quantity_multiplier,
             price=Money(f['T. Price'], currency),
             fee=Money(f['Comm/Fee'], currency),
         ))
