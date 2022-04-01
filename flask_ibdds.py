@@ -51,7 +51,6 @@ def tax():
         activity_dir.cleanup()
         confirmation_dir.cleanup()
 
-        #io = StringIO()
         r = json.dumps(res, default=my_default)
         print(r)
         return r

@@ -144,9 +144,9 @@ class InteractiveBrokersReportParser:
                 })
 
         # 2. parse settle_date from trade confirmation
-        for tc_fname in trade_confirmation_csvs:
-            with open(tc_fname, newline='') as tc_fh:
-                self._parse_trade_confirmation_csv(csv.reader(tc_fh, delimiter=','))
+        #for tc_fname in trade_confirmation_csvs:
+        #    with open(tc_fname, newline='') as tc_fh:
+        #        self._parse_trade_confirmation_csv(csv.reader(tc_fh, delimiter=','))
 
         # 3. parse everything else from activity (trades, dividends, ...)
         for activity_fname in activity_csvs:
@@ -233,7 +233,8 @@ class InteractiveBrokersReportParser:
 
         dt = _parse_datetime(f['Date/Time'])
 
-        settle_date = self._settle_dates.get((ticker.symbol, dt))
+        #settle_date = self._settle_dates.get((ticker.symbol, dt))
+        settle_date = dt.date()
         assert settle_date is not None
 
         self._trades.append(Trade(

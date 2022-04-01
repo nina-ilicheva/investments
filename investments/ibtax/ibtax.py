@@ -355,8 +355,8 @@ def run(activity_reports_dir : str, confirmation_reports_dir : str) -> str:
     report["fees_report"] = fees_report
     report["interests_report"] = interests_report
     report["portfolio"] = portfolio
-    report_string = show_report(trades_report, dividends_report, fees_report, interests_report, [], True)
-    report_string += show_portfolio_report(portfolio)
+    show_report(trades_report, dividends_report, fees_report, interests_report, [], True)
+    show_portfolio_report(portfolio)
     return report
 
 
