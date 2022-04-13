@@ -2,7 +2,9 @@ import json
 import tempfile
 import zipfile
 from io import StringIO
+from typing import Dict
 
+import pandas
 from flask import Flask, request, render_template
 import os
 
@@ -10,7 +12,7 @@ from investments.ibdds import ibdds
 from investments.ibtax import ibtax
 
 
-UPLOAD_FOLDER = 'D:/nina/Projects/investments/files'
+UPLOAD_FOLDER = 'C:/Nina/github/investments/files'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 
 app = Flask(__name__)
@@ -39,6 +41,16 @@ def my_default(obj):
     if isinstance(obj, TickerKind):
         return str(obj)
 
+
+def to_json(res: Dict[str, str]) -> str:
+    r = ""
+    for key in res:
+        value = res[key]
+        if isinstance(value, pandas.DataFrame):
+            r += f'"{key}" : {value.to_json(orient="records")}, '
+    return "{" + r[:-2] + "}"
+
+
 @app.route("/ibtax/", methods=["GET", "POST"])
 def tax():
 
@@ -51,7 +63,7 @@ def tax():
         activity_dir.cleanup()
         confirmation_dir.cleanup()
 
-        r = json.dumps(res, default=my_default)
+        r = to_json(res)
         print(r)
         return r
     else:

@@ -107,6 +107,34 @@ class InteractiveBrokersReportParser:
         self._deposits_and_withdrawals = []
         self._tickers = TickersStorage()
         self._settle_dates = {}
+        self.rus_to_eng = {
+            'Сделки': 'Trades',
+            'Дивиденды': 'Dividends',
+            'Удерживаемый налог' : 'Withholding Tax',
+            'Вводы и выводы средств' : 'Deposits & Withdrawals',
+            'Отчет о денежных средствах': 'Cash Report',
+            'Акции - Содержится в Interactive Brokers (U.K.) Limited, обслуживается компанией Interactive Brokers LLC': 'Stocks',
+            'Forex - Содержится в Interactive Brokers (U.K.) Limited, обслуживается компанией Interactive Brokers LLC': 'Forex',
+            'Символ':'Symbol',
+            'ID контракта':'Conid',
+            'Описание':'Description',
+            'Класс актива':'Asset Category',
+            'Множитель':'Multiplier',
+            'Информация о финансовом инструменте': 'Financial Instrument Information',
+            'Количество': 'Quantity',
+            'Цена транзакции': 'T. Price',
+            'Комиссия/плата': 'Comm/Fee',
+            'Валюта': 'Currency',
+            'Отчет по базовой валюте': 'Base Currency Summary',
+            'Дата расчета': 'Settle Date',
+            'Валютная сводка': 'Currency Summary',
+            'Всего': 'Total',
+            'Сумма': 'Amount',
+            'Акции': 'Stocks',
+            'Дата': 'Date',
+            'Дата/Время': 'Date/Time',
+            'Сделки': 'Trades'
+        }
 
     def __repr__(self):
         return f'IbParser(trades={len(self.trades)}, dividends={len(self.dividends)}, fees={len(self.fees)}, interests={len(self.interests)})'  # noqa: WPS221
@@ -138,10 +166,10 @@ class InteractiveBrokersReportParser:
     def parse_csv(self, *, activity_csvs: List[str], trade_confirmation_csvs: List[str]):
         # 1. parse tickers info
         for ac_fname in activity_csvs:
-            with open(ac_fname, newline='') as ac_fh:
+            with open(ac_fname, newline='', encoding='utf-8') as ac_fh:
                 self._real_parse_activity_csv(csv.reader(ac_fh, delimiter=','), {
                     'Financial Instrument Information': self._parse_instrument_information,
-                })
+                }, filename=ac_fname)
 
         # 2. parse settle_date from trade confirmation
         #for tc_fname in trade_confirmation_csvs:
@@ -150,7 +178,7 @@ class InteractiveBrokersReportParser:
 
         # 3. parse everything else from activity (trades, dividends, ...)
         for activity_fname in activity_csvs:
-            with open(activity_fname, newline='') as activity_fh:
+            with open(activity_fname, newline='', encoding='utf-8') as activity_fh:
                 self._real_parse_activity_csv(csv.reader(activity_fh, delimiter=','), {
                     'Trades': self._parse_trades,
                     'Dividends': self._parse_dividends,
@@ -165,7 +193,7 @@ class InteractiveBrokersReportParser:
                     # 'Net Asset Value', 'Notes/Legal Notes', 'Open Positions', 'Realized & Unrealized Performance Summary',
                     # 'Statement', '\ufeffStatement', 'Total P/L for Statement Period', 'Transaction Fees',
                     'Cash Report': self._parse_cash_report,
-                })
+                }, filename=activity_fname)
 
         # 4. sort
         self._trades.sort(key=lambda x: x.trade_date)
@@ -190,27 +218,31 @@ class InteractiveBrokersReportParser:
             else:
                 self._settle_dates[key] = settle_date
 
-    def _real_parse_activity_csv(self, csv_reader: Iterator[List[str]], parsers):
+    def _real_parse_activity_csv(self, csv_reader: Iterator[List[str]], parsers, filename: str):
         nrparser = NamedRowsParser()
         for row in csv_reader:
             try:
-                parser_fn = parsers[row[0]]
-            except KeyError:
-                # raise Exception(f'Unknown data {row}')
-                continue
+                self.process_row(row)
+                try:
+                    parser_fn = parsers[row[0]]
+                except KeyError:
+                    # raise Exception(f'Unknown data {row}')
+                    continue
 
-            if row[1] == 'Header':
-                nrparser.parse_header(row[2:])
-                continue
+                if row[1] == 'Header':
+                    nrparser.parse_header(row[2:])
+                    continue
 
-            if row[1] in {'Total', 'SubTotal', 'Notes'} or row[2].startswith('Total'):
-                continue
+                if row[1] in {'Total', 'SubTotal', 'Notes'} or row[2].startswith('Total'):
+                    continue
 
-            if row[1] == 'Data':
-                fields = nrparser.parse(row[2:])
-                parser_fn(fields)
-            else:
-                raise Exception(f'Unknown data {row}')
+                if row[1] == 'Data':
+                    fields = nrparser.parse(row[2:])
+                    parser_fn(fields)
+                else:
+                    raise Exception(f'Unknown data {row} in {filename}')
+            except Exception as ex:
+                raise RuntimeError(f'Failed on {row} in {filename}') from ex
 
     def _parse_instrument_information(self, f: Dict[str, str]):
         self._tickers.put(
@@ -241,7 +273,7 @@ class InteractiveBrokersReportParser:
             ticker=ticker,
             trade_date=dt,
             settle_date=settle_date,
-            quantity=int(f['Quantity']) * quantity_multiplier,
+            quantity=float(f['Quantity']) * quantity_multiplier,
             price=Money(f['T. Price'], currency),
             fee=Money(f['Comm/Fee'], currency),
         ))
@@ -329,3 +361,10 @@ class InteractiveBrokersReportParser:
             description = f['Currency Summary']
             amount = Money(f['Total'], currency)
             self._cash.append(Cash(description, amount))
+
+    def process_row(self, row):
+        for i in range(len(row)):
+            if row[i] in self.rus_to_eng:
+                row[i] = self.rus_to_eng[row[i]]
+            else:
+                row[i] = row[i].replace('Наличный дивиденд', 'Cash Dividend').replace('Всего', 'Total')
