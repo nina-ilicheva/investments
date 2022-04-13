@@ -218,7 +218,7 @@ class InteractiveBrokersReportParser:
             else:
                 self._settle_dates[key] = settle_date
 
-    def _real_parse_activity_csv(self, csv_reader: Iterator[List[str]], parsers, filename: str):
+    def _real_parse_activity_csv(self, csv_reader: Iterator[List[str]], parsers, filename=''):
         nrparser = NamedRowsParser()
         for row in csv_reader:
             try:
