@@ -12,6 +12,7 @@ from investments.interests import Interest
 from investments.money import Money
 from investments.ticker import Ticker, TickerKind
 from investments.trade import Trade
+from utility import process_row
 
 
 def _parse_datetime(strval: str) -> datetime.datetime:
@@ -107,34 +108,6 @@ class InteractiveBrokersReportParser:
         self._deposits_and_withdrawals = []
         self._tickers = TickersStorage()
         self._settle_dates = {}
-        self.rus_to_eng = {
-            'Сделки': 'Trades',
-            'Дивиденды': 'Dividends',
-            'Удерживаемый налог' : 'Withholding Tax',
-            'Вводы и выводы средств' : 'Deposits & Withdrawals',
-            'Отчет о денежных средствах': 'Cash Report',
-            'Акции - Содержится в Interactive Brokers (U.K.) Limited, обслуживается компанией Interactive Brokers LLC': 'Stocks',
-            'Forex - Содержится в Interactive Brokers (U.K.) Limited, обслуживается компанией Interactive Brokers LLC': 'Forex',
-            'Символ':'Symbol',
-            'ID контракта':'Conid',
-            'Описание':'Description',
-            'Класс актива':'Asset Category',
-            'Множитель':'Multiplier',
-            'Информация о финансовом инструменте': 'Financial Instrument Information',
-            'Количество': 'Quantity',
-            'Цена транзакции': 'T. Price',
-            'Комиссия/плата': 'Comm/Fee',
-            'Валюта': 'Currency',
-            'Отчет по базовой валюте': 'Base Currency Summary',
-            'Дата расчета': 'Settle Date',
-            'Валютная сводка': 'Currency Summary',
-            'Всего': 'Total',
-            'Сумма': 'Amount',
-            'Акции': 'Stocks',
-            'Дата': 'Date',
-            'Дата/Время': 'Date/Time',
-            'Сделки': 'Trades'
-        }
 
     def __repr__(self):
         return f'IbParser(trades={len(self.trades)}, dividends={len(self.dividends)}, fees={len(self.fees)}, interests={len(self.interests)})'  # noqa: WPS221
@@ -222,7 +195,7 @@ class InteractiveBrokersReportParser:
         nrparser = NamedRowsParser()
         for row in csv_reader:
             try:
-                self.process_row(row)
+                process_row(row)
                 try:
                     parser_fn = parsers[row[0]]
                 except KeyError:
@@ -362,9 +335,3 @@ class InteractiveBrokersReportParser:
             amount = Money(f['Total'], currency)
             self._cash.append(Cash(description, amount))
 
-    def process_row(self, row):
-        for i in range(len(row)):
-            if row[i] in self.rus_to_eng:
-                row[i] = self.rus_to_eng[row[i]]
-            else:
-                row[i] = row[i].replace('Наличный дивиденд', 'Cash Dividend').replace('Всего', 'Total')
